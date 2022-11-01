@@ -1,0 +1,48 @@
+import mongoose from "mongoose";
+import User from "../models/User.js"
+import bcrypt from 'bcryptjs'
+import { createError } from "../error.js";
+import jwt from 'jsonwebtoken';
+
+
+export const signup = async (req,res,next) => {  //async fn because the calling mongoDB will take time
+    console.log(req.body);
+      try{
+        
+            const salt = bcrypt.genSaltSync(10);
+            const hash = bcrypt.hashSync(req.body.password, salt);
+            console.log("hello");            
+            const newUser = new User({...req.body, password: hash});  
+            
+            await newUser.save();
+            res.status(200).send("User has been created");
+      }catch(err)
+      {
+        next(err); 
+      }
+}
+
+export const signin = async (req,res,next) => {
+      try{        
+           const user = await User.findOne({name : req.body.name})
+           if(!user) return next(createError(404,"User not found"));
+
+
+           const isCorrect = await bcrypt.compare(req.body.password, user.password)
+           if(!isCorrect) return next(createError(400,"Wrong credentials!"));
+
+           const token = jwt.sign({id : user._id}, process.env.JWT)         //JWT=JsonWebToken(used as access token) -- 
+                                                                            //   used to verify user, hash token
+                                                                            // JWT is secret key
+           const {password, ...others} = user._doc;    //everything except password and under _doc since users has many field datas
+
+
+           res.cookie("access_token", token, {          //cookies for security
+            httpOnly: true
+           }).status(200).json(others);
+
+      }catch(err)
+      {
+        next(err); 
+      }
+};
